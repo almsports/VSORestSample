@@ -48,6 +48,7 @@
   <ItemGroup>
     <Compile Include="DataModel\ApiCollection.cs" />
     <Compile Include="DataModel\ProjectDefinition.cs" />
+    <Compile Include="DataModel\WorkItemDefinition.cs" />
     <Compile Include="Helper.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />

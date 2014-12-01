@@ -9,7 +9,6 @@ namespace RestSample.DataModel
 {
     public class ProjectDefinition
     {
-
         [JsonProperty(PropertyName = "id")]
         public String ID { get; set; }
         
@@ -30,6 +29,10 @@ namespace RestSample.DataModel
 
         [JsonProperty(PropertyName = "defaultTeam")]
         public Team DefaultTeam { get; set; }
+
+        [JsonProperty(PropertyName = "capabilities")]
+        public Capability Capabilities { get; set; }
+
     }
 
     public class Links
@@ -60,5 +63,29 @@ namespace RestSample.DataModel
 
         [JsonProperty(PropertyName = "url")]
         public string URL { get; set; }
+    }
+
+    public class Capability
+    {
+        [JsonProperty(PropertyName = "versioncontrol")]
+        public VersionControl Versioncontrol { get; set; }
+
+        [JsonProperty(PropertyName = "processTemplate")]
+        public ProcessTemplate ProcessTemplate { get; set; }
+
+    }
+
+    public class VersionControl
+    {
+        [JsonProperty(PropertyName = "sourceControlType")]
+        public string SourceControlType { get; set; }
+
+    }
+
+    public class ProcessTemplate
+    {
+        [JsonProperty(PropertyName = "templateName")]
+        public string TemplateName { get; set; }
+
     }
 }

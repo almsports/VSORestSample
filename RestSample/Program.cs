@@ -1,4 +1,5 @@
 ﻿using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using RestSample.DataModel;
 using RestSample.RESTService;
 using System;
@@ -25,6 +26,8 @@ namespace RestSample
         public static String constAccount = "almsports";
 
         //Api version query parameter
+        public static String constApiVersion = "api-version=1.0";
+
         public static String constApiVersion1 = "?api-version=1.0-preview.1";
 
         public static String constApiVersion2 = "api-version=1.0-preview.2";
@@ -73,25 +76,109 @@ namespace RestSample
                 string number = Console.ReadLine();
                 
                 //search for project in projects
-                int index = 0;
-                ProjectDefinition project = null;
-                foreach (var item in projects.Value)
-                {
-                    if (Convert.ToInt32(number) == index)
-                    {
-                        project = item;
-                        continue;
-                    }
-                    index++;
-                }
-               
+                ProjectDefinition project = projects.GetIndex(projects.Value, Convert.ToInt32(number));
+
+                //load team project with capabilities 
+                //just for showing different return values for same DataContract
+                LoadTeamProject(client, project);
+
+                //load work items               
                 LoadWorkItems(client, project.Name);
             }
         }
 
-        private static void LoadWorkItems(HttpClient client, string p)
+        private static async void LoadWorkItems(HttpClient client, string projectName)
         {
-            throw new NotImplementedException();
+            string baseUrl = String.Format(constBaseUrl, projectName+"/");
+
+            //create Json Object with work item query
+            JObject wiql = JObject.FromObject(new
+            {
+                query = string.Format("SELECT [System.Id],[System.WorkItemType],[System.Title],[System.AssignedTo],[System.State],[System.Tags] " +
+                "FROM WorkItemLinks " +
+                "Where Source.[System.WorkItemType] IN GROUP 'Microsoft.RequirementCategory' " +
+                "AND Target.[System.WorkItemType] IN GROUP 'Microsoft.RequirementCategory' " +
+                "AND Target.[System.State] IN ('New','Approved','Committed') " +
+                "AND [System.Links.LinkType] = 'System.LinkTypes.Hierarchy-Forward' " +
+                "ORDER BY [Microsoft.VSTS.Common.BacklogPriority] ASC, " +
+                "[System.Id] ASC MODE (Recursive, ReturnMatchingChildren)"
+                )
+            }
+            );
+
+            //first we only get all work item ids
+            var responseBody = await Common.PushAsync(client, wiql, String.Format(baseUrl + "/wit/wiql?{0}", constApiVersion));
+
+            // Rest-API does only allow 200 ids
+            // Get string of workitem IDs (split in groups of 200 ids)
+            var workItemStrings = BuildWorkItemStrings(responseBody.workItemRelations);
+
+            //this time base URL is without projectname!!!
+            baseUrl = String.Format(baseUrl, "");
+
+            //set fields - which dadtda we want to get
+            string whereClause = string.Format("fields=System.Id,System.Title,System.WorkItemType,Microsoft.VSTS.Scheduling.RemainingWork");
+            GetWorkItemData(client, String.Format(baseUrl + "wit/workitems?ids={0}{1}", workItemStrings, whereClause));
+        }
+
+        private static string BuildWorkItemStrings(JArray cobjFoundWorkItems)
+        {
+            // get ids of source workitems
+            List<JToken> workitems = cobjFoundWorkItems.Values("source").Values("id").Distinct().ToList();
+            // get target workitems and add them
+            workitems.AddRange(cobjFoundWorkItems.Values("target").Values("id").Distinct().ToList());
+
+            string strIDsToGet = string.Empty;
+
+            foreach (var foundWI in workitems)
+            {
+                if (!string.IsNullOrEmpty(strIDsToGet))
+                {
+                    strIDsToGet += ",";
+                }
+                strIDsToGet += foundWI.Value<int>();
+            }
+
+
+            return strIDsToGet;
+        }
+
+        private async static void GetWorkItemData(HttpClient client, string baseUrl, dynamic workItemStrings, string whereClause)
+        {
+            List<WorkItemDefinition> allWorkItems = new List<WorkItemDefinition>();
+            ApiCollection<WorkItemDefinition> workItemCollection;
+            foreach (var workItems in workItemStrings)
+            {
+                string uriString;
+                if (!String.IsNullOrEmpty(whereClause))
+                {
+                    uriString = string.Format(baseUrl + "{0}&{1}", workItems, whereClause);
+                }
+                else
+                {
+                    uriString = string.Format(baseUrl + "{0}&{1}", workItems);
+                }
+
+                dynamic wiContracts = await Common.GetAsync(client, String.Format(uriString + "&{0}", constApiVersion2));
+
+                workItemCollection = JsonConvert.DeserializeObject<ApiCollection<WorkItemDefinition>>(wiContracts);
+
+                if (workItemCollection != null && workItemCollection.Count > 0)
+                {
+                    foreach (var item in workItemCollection.Value)
+                    {
+                        Console.WriteLine(String.Format(
+                            "{0}: {1} - {2} - RemainingWork {3}",
+                            item.ID,
+                            item.Fields.WorkItemType,
+                            item.Fields.Title,
+                            item.Fields.RemainingWork
+                            ));
+
+                    }
+                }
+            }
+            return;
         }
 
         private static async Task<ApiCollection<ProjectDefinition>> LoadTeamProjects(HttpClient client)
@@ -100,14 +187,23 @@ namespace RestSample
 
             var responseBody = String.Empty;
             string baseUrl = String.Format(constBaseUrl, "");
-            responseBody = await Common.GetAsync(client, baseUrl + "projects?", constApiVersion2);
+            responseBody = await Common.GetAsync(client, String.Format(baseUrl + "projects?{0}", constApiVersion));
 
             projectDefinitions = JsonConvert.DeserializeObject<ApiCollection<ProjectDefinition>>(responseBody);
 
             return projectDefinitions;
         }
 
+        private static async void LoadTeamProject(HttpClient client, ProjectDefinition project)
+        {
+            ProjectDefinition projectDefinitions = null;
 
+            var responseBody = String.Empty;
+            string baseUrl = String.Format(constBaseUrl, "");
+            responseBody = await Common.GetAsync(client, String.Format(baseUrl + "projects/{0}?includeCapabilities={1}&{2}", project.Name, true, constApiVersion));
+
+            projectDefinitions = JsonConvert.DeserializeObject<ProjectDefinition>(responseBody);
+        }
         
     }
 }

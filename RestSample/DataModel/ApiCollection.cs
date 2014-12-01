@@ -15,5 +15,19 @@ namespace RestSample.DataModel
         [JsonProperty(PropertyName = "count")]
         public int Count { get; set; }
 
+        public T GetIndex(IEnumerable<T> collection, int index)
+        {
+            int number = 0;
+            foreach (var item in collection)
+            {
+                if (Convert.ToInt32(number) == index)
+                {
+                    return item;
+                }
+                index++;
+            }
+
+            return default(T);
+        }
     }
 }
