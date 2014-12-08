@@ -85,40 +85,44 @@ namespace RestSample
                 //load work items               
                 LoadWorkItems(client, project.Name);
             }
+
+            Console.WriteLine("----------------------------------------------------------------------------------");
+            Console.ReadLine();
         }
 
         private static async void LoadWorkItems(HttpClient client, string projectName)
         {
-            string baseUrl = String.Format(constBaseUrl, projectName+"/");
+            string baseUrl = String.Format(constBaseUrl, projectName + "/");
 
             //create Json Object with work item query
             JObject wiql = JObject.FromObject(new
-            {
-                query = string.Format("SELECT [System.Id],[System.WorkItemType],[System.Title],[System.AssignedTo],[System.State],[System.Tags] " +
-                "FROM WorkItemLinks " +
-                "Where Source.[System.WorkItemType] IN GROUP 'Microsoft.RequirementCategory' " +
-                "AND Target.[System.WorkItemType] IN GROUP 'Microsoft.RequirementCategory' " +
-                "AND Target.[System.State] IN ('New','Approved','Committed') " +
-                "AND [System.Links.LinkType] = 'System.LinkTypes.Hierarchy-Forward' " +
-                "ORDER BY [Microsoft.VSTS.Common.BacklogPriority] ASC, " +
-                "[System.Id] ASC MODE (Recursive, ReturnMatchingChildren)"
-                )
-            }
+                {
+                    query = string.Format("SELECT [System.Id],[System.WorkItemType],[System.Title],[System.AssignedTo],[System.State],[System.Tags] " +
+                    "FROM WorkItemLinks " +
+                    "Where Source.[System.WorkItemType] IN GROUP 'Microsoft.RequirementCategory' " +
+                    "AND Target.[System.WorkItemType] IN GROUP 'Microsoft.RequirementCategory' " +
+                    "AND Target.[System.State] IN ('New','Approved','Committed') " +
+                    "AND [System.Links.LinkType] = 'System.LinkTypes.Hierarchy-Forward' " +
+                    "ORDER BY [Microsoft.VSTS.Common.BacklogPriority] ASC, " +
+                    "[System.Id] ASC MODE (Recursive, ReturnMatchingChildren)"
+                    )
+                }
             );
 
             //first we only get all work item ids
             var responseBody = await Common.PushAsync(client, wiql, String.Format(baseUrl + "/wit/wiql?{0}", constApiVersion));
 
-            // Rest-API does only allow 200 ids
-            // Get string of workitem IDs (split in groups of 200 ids)
+            // Attention: Rest-API does only allow 200 ids
+            // Get string of workitem IDs
             var workItemStrings = BuildWorkItemStrings(responseBody.workItemRelations);
 
             //this time base URL is without projectname!!!
-            baseUrl = String.Format(baseUrl, "");
+            baseUrl = String.Format(constBaseUrl, "");
 
             //set fields - which dadtda we want to get
             string whereClause = string.Format("fields=System.Id,System.Title,System.WorkItemType,Microsoft.VSTS.Scheduling.RemainingWork");
-            GetWorkItemData(client, String.Format(baseUrl + "wit/workitems?ids={0}{1}", workItemStrings, whereClause));
+
+            GetWorkItemData(client, String.Format(baseUrl + "wit/workitems?ids={0}", workItemStrings), whereClause);
         }
 
         private static string BuildWorkItemStrings(JArray cobjFoundWorkItems)
@@ -143,41 +147,40 @@ namespace RestSample
             return strIDsToGet;
         }
 
-        private async static void GetWorkItemData(HttpClient client, string baseUrl, dynamic workItemStrings, string whereClause)
+        private async static void GetWorkItemData(HttpClient client, string baseUrl, string whereClause)
         {
             List<WorkItemDefinition> allWorkItems = new List<WorkItemDefinition>();
             ApiCollection<WorkItemDefinition> workItemCollection;
-            foreach (var workItems in workItemStrings)
+            
+            string uriString;
+            if (!String.IsNullOrEmpty(whereClause))
             {
-                string uriString;
-                if (!String.IsNullOrEmpty(whereClause))
+                uriString = string.Format(baseUrl + "&{0}", whereClause);
+            }
+            else
+            {
+                uriString = baseUrl;
+            }
+
+            var wiContracts = await Common.GetAsync(client, String.Format(uriString + "&{0}", constApiVersion2));
+
+            workItemCollection = JsonConvert.DeserializeObject<ApiCollection<WorkItemDefinition>>(wiContracts);
+
+            if (workItemCollection != null && workItemCollection.Count > 0)
+            {
+                foreach (var item in workItemCollection.Value)
                 {
-                    uriString = string.Format(baseUrl + "{0}&{1}", workItems, whereClause);
-                }
-                else
-                {
-                    uriString = string.Format(baseUrl + "{0}&{1}", workItems);
-                }
+                    Console.WriteLine(String.Format(
+                        "{0}: {1} - {2} - RemainingWork {3}",
+                        item.ID,
+                        item.Fields.WorkItemType,
+                        item.Fields.Title,
+                        item.Fields.RemainingWork
+                        ));
 
-                dynamic wiContracts = await Common.GetAsync(client, String.Format(uriString + "&{0}", constApiVersion2));
-
-                workItemCollection = JsonConvert.DeserializeObject<ApiCollection<WorkItemDefinition>>(wiContracts);
-
-                if (workItemCollection != null && workItemCollection.Count > 0)
-                {
-                    foreach (var item in workItemCollection.Value)
-                    {
-                        Console.WriteLine(String.Format(
-                            "{0}: {1} - {2} - RemainingWork {3}",
-                            item.ID,
-                            item.Fields.WorkItemType,
-                            item.Fields.Title,
-                            item.Fields.RemainingWork
-                            ));
-
-                    }
                 }
             }
+            
             return;
         }
 
