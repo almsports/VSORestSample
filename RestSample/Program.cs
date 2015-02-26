@@ -159,10 +159,10 @@ namespace RestSample
             }
             else
             {
-                uriString = baseUrl;
+                uriString = baseUrl + "&{0}";
             }
 
-            var wiContracts = await Common.GetAsync(client, String.Format(uriString + "&{0}", constApiVersion2));
+            var wiContracts = await Common.GetAsync(client, String.Format(uriString , constApiVersion));
 
             workItemCollection = JsonConvert.DeserializeObject<ApiCollection<WorkItemDefinition>>(wiContracts);
 
@@ -189,8 +189,8 @@ namespace RestSample
             ApiCollection<ProjectDefinition> projectDefinitions;
 
             var responseBody = String.Empty;
-            string baseUrl = String.Format(constBaseUrl, "");
-            responseBody = await Common.GetAsync(client, String.Format(baseUrl + "projects?{0}", constApiVersion));
+            string baseUrl = String.Format(constBaseUrl, "") + "projects?" + constApiVersion;
+            responseBody = await Common.GetAsync(client, baseUrl);
 
             projectDefinitions = JsonConvert.DeserializeObject<ApiCollection<ProjectDefinition>>(responseBody);
 

@@ -24,7 +24,7 @@ namespace RestSample.DataModel
                 {
                     return item;
                 }
-                index++;
+                number++;
             }
 
             return default(T);
